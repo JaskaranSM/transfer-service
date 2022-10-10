@@ -2,10 +2,12 @@ package main
 
 import (
 	"time"
+
+	"github.com/jaskaranSM/transfer-service/manager"
 )
 
 func main() {
-	manager := NewGoogleDriveManager()
+	client := manager.NewGoogleDriveManager()
 	// _, err := manager.AddUpload(&AddUploadOpts{
 	// 	Path:               "D:/Evan Call - APPARE-RANMAN! ORIGINAL SOUNDTRACK Appare Tokidoki Kosame MP3/",
 	// 	ParentId:           parent,
@@ -13,7 +15,7 @@ func main() {
 	// 	Concurrency:        10,
 	// 	CleanAfterComplete: false,
 	// })
-	_, err := manager.AddDownload(&AddDownloadOpts{
+	_, err := client.AddDownload(&manager.AddDownloadOpts{
 		FileId:      "1MqwvxpG-mcKvLwayk2WMwnc_zdiQWtOx",
 		LocalDir:    ".",
 		Size:        0,

@@ -1,0 +1,7 @@
+.idea
+accounts
+credentials.json
+.env
+env
+transfer-service
+log.txt
