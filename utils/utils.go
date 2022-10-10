@@ -1,9 +1,11 @@
-package main
+package utils
 
 import (
 	"net/http"
 	"os"
 )
+
+const LogFile string = "log.txt"
 
 func GetFileContentTypePath(file_path string) (string, error) {
 	file, err := os.Open(file_path)
