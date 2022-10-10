@@ -1,7 +1,6 @@
 package manager
 
 import (
-	"fmt"
 	"os"
 	"time"
 
@@ -67,35 +66,37 @@ func (g *GoogleDriveTransferStatus) SpeedObserver() {
 }
 
 func (g *GoogleDriveTransferStatus) OnTransferComplete(client *gdrive.GoogleDriveClient, fileId string) {
+	logger := logging.GetLogger()
 	g.isCompleted = true
 	g.StopSpeedObserver()
 	if g.isUpload {
-		fmt.Printf("[onUploadComplete]: %s\n", fileId)
+		logger.Debug("on upload complete: ", zap.String("fileID", fileId))
 	} else {
-		fmt.Printf("[onDownloadComplete]: %s\n", fileId)
+		logger.Debug("on download complete: ", zap.String("fileID", fileId))
 	}
 
 	g.onTransferCompleteUserCallback()
 }
 
 func (g *GoogleDriveTransferStatus) OnTransferStart(client *gdrive.GoogleDriveClient) {
+	logger := logging.GetLogger()
 	g.StartSpeedObserver()
 	if g.isUpload {
-		fmt.Printf("[onUploadStart]: %v\n", client)
+		logger.Debug("on upload start")
 	} else {
-		fmt.Printf("[onDownloadStart]: %v\n", client)
+		logger.Debug("on download start")
 	}
 }
 
 func (g *GoogleDriveTransferStatus) OnTransferError(client *gdrive.GoogleDriveClient, err error) {
+	logger := logging.GetLogger()
 	g.isFailed = true
 	g.StopSpeedObserver()
 	if g.isUpload {
-		fmt.Printf("[onUploadError]: %v\n", err)
+		logger.Debug("on uploader error", zap.Error(err))
 	} else {
-		fmt.Printf("[onDownloadError]: %v\n", err)
+		logger.Debug("on download error", zap.Error(err))
 	}
-
 }
 
 func (g *GoogleDriveTransferStatus) CompletedLength() int64 {
