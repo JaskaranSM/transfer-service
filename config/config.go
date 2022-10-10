@@ -4,9 +4,6 @@ import (
 	"log"
 
 	"github.com/spf13/viper"
-	"go.uber.org/zap"
-
-	"github.com/jaskaranSM/transfer-service/logging"
 )
 
 type Config struct {
@@ -32,8 +29,9 @@ func init() {
 	viper.AddConfigPath("../.")
 
 	viper.SetDefault("APP_PORT", 6969)
-	viper.SetDefault("LOG_LEVEL", "debug")
+	viper.SetDefault("LOG_LEVEL", "")
 	viper.SetDefault("USE_SA", true)
+	viper.SetDefault("ENVIRONMENT", "local")
 	viper.AutomaticEnv()
 
 	// Read config file
@@ -55,8 +53,8 @@ func init() {
 	cfg.Validate()
 
 	// Set default log level to debug if environment is local
-	if cfg.Env == logging.EnvLocal && cfg.LogLevel == "" {
-		cfg.LogLevel = zap.DebugLevel.String()
+	if cfg.Env == "local" && cfg.LogLevel == "" {
+		cfg.LogLevel = "debug"
 	}
 }
 
