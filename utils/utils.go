@@ -3,9 +3,12 @@ package utils
 import (
 	"net/http"
 	"os"
-)
 
-const LogFile string = "log.txt"
+	"github.com/gofiber/fiber/v2"
+	"go.uber.org/zap"
+
+	"github.com/jaskaranSM/transfer-service/logging"
+)
 
 func GetFileContentTypePath(file_path string) (string, error) {
 	file, err := os.Open(file_path)
@@ -26,4 +29,10 @@ func GetFileContentType(out *os.File) (string, error) {
 	contentType := http.DetectContentType(buffer)
 
 	return contentType, nil
+}
+
+func HandleError(ctx *fiber.Ctx, err error) error {
+	logger := logging.GetLogger()
+	logger.Error("Error occurred", zap.Error(err))
+	return ctx.Status(http.StatusInternalServerError).JSON(fiber.Map{"Detail": "internal server error"})
 }
