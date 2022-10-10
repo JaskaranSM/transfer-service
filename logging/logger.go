@@ -6,19 +6,18 @@ import (
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-
-	"github.com/jaskaranSM/transfer-service/utils"
 )
 
 var Logger *zap.Logger
 
 const EnvLocal = "local"
+const logFile string = "log.txt"
 
 func getLoggerObject() *zap.Logger {
-	err := os.Remove(utils.LogFile)
+	err := os.Remove(logFile)
 	if err != nil {
 		log.Println("Cannot remove logfile", zap.Error(err),
-			zap.String("LogFile", utils.LogFile),
+			zap.String("logFile", logFile),
 		)
 	}
 
@@ -26,10 +25,10 @@ func getLoggerObject() *zap.Logger {
 	cfg.EncodeLevel = zapcore.CapitalLevelEncoder
 	cfg.EncodeTime = zapcore.RFC3339TimeEncoder
 
-	handleSync, _, err := zap.Open(utils.LogFile)
+	handleSync, _, err := zap.Open(logFile)
 	if err != nil {
 		log.Println("Cannot open log file for zap :", zap.Error(err),
-			zap.String("LogFile", utils.LogFile),
+			zap.String("logFile", logFile),
 		)
 	}
 

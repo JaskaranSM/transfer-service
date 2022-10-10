@@ -31,9 +31,9 @@ func init() {
 	viper.AddConfigPath(".")
 	viper.AddConfigPath("../.")
 
-	viper.SetDefault("RABBITMQ_QUEUE_NAME", "")
-	viper.SetDefault("SENDGRID_API_KEY", "")
-
+	viper.SetDefault("APP_PORT", 6969)
+	viper.SetDefault("LOG_LEVEL", "debug")
+	viper.SetDefault("USE_SA", true)
 	viper.AutomaticEnv()
 
 	// Read config file
