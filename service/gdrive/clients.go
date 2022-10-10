@@ -29,6 +29,7 @@ type GoogleDriveClient struct {
 	completed            int64
 	total                int64
 	isCancelled          bool
+	completedFiles       int
 	callbackFired        bool
 	fileId               string
 	wg                   sync.WaitGroup
@@ -165,17 +166,16 @@ func (gd *GoogleDriveClient) OnTransferError(_ *GoogleDriveFileTransfer, err err
 
 func (gd *GoogleDriveClient) OnTransferStart(transfer *GoogleDriveFileTransfer) {
 	logger := logging.GetLogger()
-	logger.Debug("Starting Transfer",
-		zap.String("File Name", transfer.file.Name()),
-	)
+	logger.Debug("Starting Transfer")
 }
 
 func (gd *GoogleDriveClient) OnTransferComplete(transfer *GoogleDriveFileTransfer) {
+	gd.completedFiles += 1
 	logger := logging.GetLogger()
 	gd.fileId = transfer.fileId
 	logger.Debug("Transfer Completed",
-		zap.String("File Name", transfer.file.Name()),
-		zap.String("File ID", gd.fileId),
+		zap.String("File_ID", gd.fileId),
+		zap.Int("CompletedFiles", gd.completedFiles),
 	)
 
 	<-gd.concurrency
@@ -189,7 +189,6 @@ func (gd *GoogleDriveClient) OnTransferUpdate(transfer *GoogleDriveFileTransfer,
 
 	gd.completed += chunk
 	logger.Debug("Transfer Updated",
-		zap.String("File Name", transfer.file.Name()),
 		zap.Int64("file chunk", chunk),
 		zap.Int64("Total completed", gd.completed),
 	)
@@ -245,6 +244,51 @@ func (gd *GoogleDriveClient) ListFilesByParentId(parentId string, name string, c
 		}
 	}
 	return files, nil
+}
+
+func (gd *GoogleDriveClient) HandleCloneFile(file *drive.File, desId string, cb func(*drive.File)) error {
+	service, err := gd.GetDriveService()
+	if err != nil {
+		return err
+	}
+	transfer := NewGoogleDriveFileTransfer(service, gd, cb)
+	gd.concurrency <- 1
+	gd.wg.Add(1)
+	go transfer.Clone(file, desId, 0)
+	gd.currentTransferQueue = append(gd.currentTransferQueue, transfer)
+	return nil
+}
+
+func (gd *GoogleDriveClient) CloneDir(dir *drive.File, parentId string) error {
+	logger := logging.GetLogger()
+	q := utils.NewQueue()
+	dirValue := utils.NewDirValue(dir.Id, parentId)
+	q.Enqueue(dirValue)
+	for !q.IsEmpty() {
+		dirItem := q.Deque()
+		files, err := gd.ListFilesByParentId(dirItem.Src, "", -1)
+		if err != nil {
+			logger.Error("Error while listing gdrive directory contents", zap.Error(err), zap.String("src", dirItem.Src))
+			return err
+		}
+
+		for _, file := range files {
+			if file.MimeType == "application/vnd.google-apps.folder" {
+				newDir, err := gd.CreateDir(file.Name, dirItem.Src)
+				if err != nil {
+					return err
+				}
+				q.Enqueue(utils.NewDirValue(file.Id, newDir.Id))
+			} else {
+				logger.Info(file.Id)
+				err := gd.HandleCloneFile(file, dirItem.Des, func(f *drive.File) {})
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (gd *GoogleDriveClient) DownloadDir(dir *drive.File, localDir string) error {
@@ -370,6 +414,37 @@ func (gd *GoogleDriveClient) GetFileMetadata(fileId string) (*drive.File, error)
 		)
 	}
 	return file, err
+}
+
+func (gd *GoogleDriveClient) Clone(srcId string, desId string) error {
+	gd.listener.OnTransferStart(gd)
+	meta, err := gd.GetFileMetadata(srcId)
+	if err != nil {
+		gd.listener.OnTransferError(gd, err)
+		return err
+	}
+
+	var fileId string
+	if meta.MimeType == "application/vnd.google-apps.folder" {
+		newDir, err := gd.CreateDir(meta.Name, desId)
+		if err != nil {
+			gd.listener.OnTransferError(gd, err)
+			return err
+		}
+		fileId = newDir.Id
+		err = gd.CloneDir(meta, newDir.Id)
+		if err != nil {
+			gd.listener.OnTransferError(gd, err)
+			return err
+		}
+	} else {
+		err = gd.HandleCloneFile(meta, desId, func(f *drive.File) {
+			fileId = f.Id
+		})
+	}
+	gd.wg.Wait()
+	gd.listener.OnTransferComplete(gd, fileId)
+	return nil
 }
 
 func (gd *GoogleDriveClient) Download(fileId string, localDir string) error {

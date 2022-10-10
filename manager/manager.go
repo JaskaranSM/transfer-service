@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -9,12 +10,13 @@ import (
 
 	"github.com/jaskaranSM/transfer-service/logging"
 	"github.com/jaskaranSM/transfer-service/service/gdrive"
+	gdriveconstants "github.com/jaskaranSM/transfer-service/service/gdrive/constants"
 )
 
-func NewGoogleDriveTransferStatus(gid string, isUpload bool, path string, cleanAfterComplete bool, OnTransferComplete func()) *GoogleDriveTransferStatus {
+func NewGoogleDriveTransferStatus(gid string, transferType string, path string, cleanAfterComplete bool, OnTransferComplete func()) *GoogleDriveTransferStatus {
 	return &GoogleDriveTransferStatus{
 		gid:                            gid,
-		isUpload:                       isUpload,
+		transferType:                   transferType,
 		path:                           path,
 		cleanAfterComplete:             cleanAfterComplete,
 		onTransferCompleteUserCallback: OnTransferComplete,
@@ -30,7 +32,7 @@ type GoogleDriveTransferStatus struct {
 	gid                            string
 	cleanAfterComplete             bool
 	path                           string
-	isUpload                       bool
+	transferType                   string
 	onTransferCompleteUserCallback func()
 }
 
@@ -69,11 +71,7 @@ func (g *GoogleDriveTransferStatus) OnTransferComplete(client *gdrive.GoogleDriv
 	logger := logging.GetLogger()
 	g.isCompleted = true
 	g.StopSpeedObserver()
-	if g.isUpload {
-		logger.Debug("on upload complete: ", zap.String("fileID", fileId))
-	} else {
-		logger.Debug("on download complete: ", zap.String("fileID", fileId))
-	}
+	logger.Debug(fmt.Sprintf("on %s complete: ", g.transferType), zap.String("fileID", fileId))
 
 	g.onTransferCompleteUserCallback()
 }
@@ -81,22 +79,14 @@ func (g *GoogleDriveTransferStatus) OnTransferComplete(client *gdrive.GoogleDriv
 func (g *GoogleDriveTransferStatus) OnTransferStart(client *gdrive.GoogleDriveClient) {
 	logger := logging.GetLogger()
 	g.StartSpeedObserver()
-	if g.isUpload {
-		logger.Debug("on upload start")
-	} else {
-		logger.Debug("on download start")
-	}
+	logger.Debug(fmt.Sprintf("on %s start: ", g.transferType))
 }
 
 func (g *GoogleDriveTransferStatus) OnTransferError(client *gdrive.GoogleDriveClient, err error) {
 	logger := logging.GetLogger()
 	g.isFailed = true
 	g.StopSpeedObserver()
-	if g.isUpload {
-		logger.Debug("on uploader error", zap.Error(err))
-	} else {
-		logger.Debug("on download error", zap.Error(err))
-	}
+	logger.Debug(fmt.Sprintf("on %s Error: ", g.transferType), zap.Error(err))
 }
 
 func (g *GoogleDriveTransferStatus) CompletedLength() int64 {
@@ -142,6 +132,15 @@ type AddDownloadOpts struct {
 	OnDownloadCompleteCallback func()
 }
 
+type AddCloneOpts struct {
+	FileId                  string
+	DesId                   string
+	Gid                     string
+	Size                    int64
+	Concurrency             int
+	OnCloneCompleteCallback func()
+}
+
 func NewGoogleDriveManager() *GoogleDriveManager {
 	return &GoogleDriveManager{
 		queue: make(map[string]*GoogleDriveTransferStatus),
@@ -167,7 +166,7 @@ func (g *GoogleDriveManager) AddDownload(opts *AddDownloadOpts) (string, error) 
 		opts.Gid = gid.String()
 	}
 
-	status := NewGoogleDriveTransferStatus(opts.Gid, false, opts.FileId, false, func() {
+	status := NewGoogleDriveTransferStatus(opts.Gid, gdriveconstants.TransferTypeDownloading, opts.FileId, false, func() {
 		os.Exit(0)
 	})
 
@@ -188,6 +187,35 @@ func (g *GoogleDriveManager) AddDownload(opts *AddDownloadOpts) (string, error) 
 	return opts.Gid, nil
 }
 
+func (g *GoogleDriveManager) AddClone(opts *AddCloneOpts) (string, error) {
+	logger := logging.GetLogger()
+	if opts.Gid == "" {
+		gid, err := uuid.NewUUID()
+		if err != nil {
+			logger.Error("Could not create new UUID", zap.Error(err))
+			return "", err
+		}
+		opts.Gid = gid.String()
+	}
+	status := NewGoogleDriveTransferStatus(opts.Gid, gdriveconstants.TransferTypeCloning, opts.FileId, false, func() {
+		os.Exit(0)
+	})
+	client := gdrive.NewGoogleDriveClient(opts.Concurrency, opts.Size, status)
+	status.SetClient(client)
+	g.queue[status.gid] = status
+	err := client.Authorize()
+	if err != nil {
+		return opts.Gid, err
+	}
+	go func() {
+		err := client.Clone(opts.FileId, opts.DesId)
+		if err != nil {
+			logger.Error("Error while uploading file", zap.Error(err))
+		}
+	}()
+	return opts.Gid, nil
+}
+
 func (g *GoogleDriveManager) AddUpload(opts *AddUploadOpts) (string, error) {
 	logger := logging.GetLogger()
 	if opts.Gid == "" {
@@ -198,7 +226,7 @@ func (g *GoogleDriveManager) AddUpload(opts *AddUploadOpts) (string, error) {
 		}
 		opts.Gid = gid.String()
 	}
-	status := NewGoogleDriveTransferStatus(opts.Gid, true, opts.Path, opts.CleanAfterComplete, func() {
+	status := NewGoogleDriveTransferStatus(opts.Gid, gdriveconstants.TransferTypeUploading, opts.Path, opts.CleanAfterComplete, func() {
 		os.Exit(0)
 	})
 	client := gdrive.NewGoogleDriveClient(opts.Concurrency, opts.Size, status)
@@ -208,6 +236,11 @@ func (g *GoogleDriveManager) AddUpload(opts *AddUploadOpts) (string, error) {
 	if err != nil {
 		return opts.Gid, err
 	}
-	go client.Upload(opts.Path, opts.ParentId)
+	go func() {
+		err := client.Upload(opts.Path, opts.ParentId)
+		if err != nil {
+			logger.Error("Error while uploading file", zap.Error(err))
+		}
+	}()
 	return opts.Gid, nil
 }

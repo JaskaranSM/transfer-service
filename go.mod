@@ -1,6 +1,6 @@
 module github.com/jaskaranSM/transfer-service
 
-go 1.19
+go 1.18
 
 require (
 	github.com/gofiber/fiber/v2 v2.38.1

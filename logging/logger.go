@@ -20,7 +20,8 @@ func getLoggerObject() *zap.Logger {
 			zap.String("logFile", logFile),
 		)
 	}
-
+	var level zapcore.Level = 0
+	level = zapcore.DebugLevel
 	cfg := zap.NewProductionEncoderConfig()
 	cfg.EncodeLevel = zapcore.CapitalLevelEncoder
 	cfg.EncodeTime = zapcore.RFC3339TimeEncoder
@@ -33,8 +34,8 @@ func getLoggerObject() *zap.Logger {
 	}
 
 	logger := zap.New(
-		zapcore.NewTee(zapcore.NewCore(zapcore.NewConsoleEncoder(cfg), os.Stdout, zap.InfoLevel),
-			zapcore.NewCore(zapcore.NewConsoleEncoder(cfg), handleSync, zap.InfoLevel),
+		zapcore.NewTee(zapcore.NewCore(zapcore.NewConsoleEncoder(cfg), os.Stdout, level),
+			zapcore.NewCore(zapcore.NewConsoleEncoder(cfg), handleSync, level),
 		),
 		zap.AddCaller(),
 	)
