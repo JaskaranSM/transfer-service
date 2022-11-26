@@ -197,6 +197,7 @@ func NewGoogleDriveClient(con int, total int64, listener GoogleDriveClientListen
 		concurrency:    make(chan int, con),
 		total:          total,
 		listener:       listener,
+		Name:           "unknown",
 	}
 	return client
 }

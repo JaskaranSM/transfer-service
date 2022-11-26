@@ -34,6 +34,7 @@ type GoogleDriveClient struct {
 	fileId               string
 	wg                   sync.WaitGroup
 	DriveSrv             *drive.Service
+	Name                 string
 }
 
 func (gd *GoogleDriveClient) GetDriveService() (srv *drive.Service, err error) {
@@ -423,7 +424,7 @@ func (gd *GoogleDriveClient) Clone(srcId string, desId string) error {
 		gd.listener.OnTransferError(gd, err)
 		return err
 	}
-
+	gd.Name = meta.Name
 	var fileId string
 	if meta.MimeType == "application/vnd.google-apps.folder" {
 		newDir, err := gd.CreateDir(meta.Name, desId)
@@ -447,6 +448,24 @@ func (gd *GoogleDriveClient) Clone(srcId string, desId string) error {
 	return nil
 }
 
+func (G *GoogleDriveClient) IsDir(file *drive.File) bool {
+	return file.MimeType == "application/vnd.google-apps.folder"
+}
+
+func (gd *GoogleDriveClient) GetFolderSize(folderId string, size *int64) {
+	files, _ := gd.ListFilesByParentId(folderId, "", -1)
+	for _, file := range files {
+		if gd.isCancelled {
+			return
+		}
+		if file.MimeType == "application/vnd.google-apps.folder" {
+			gd.GetFolderSize(file.Id, size)
+		} else {
+			*size += file.Size
+		}
+	}
+}
+
 func (gd *GoogleDriveClient) Download(fileId string, localDir string) error {
 	logger := logging.GetLogger()
 	gd.listener.OnTransferStart(gd)
@@ -455,7 +474,16 @@ func (gd *GoogleDriveClient) Download(fileId string, localDir string) error {
 		gd.listener.OnTransferError(gd, err)
 		return nil
 	}
-
+	gd.Name = meta.Name
+	if gd.total == 0 {
+		gd.Name = "getting metadata"
+		if gd.IsDir(meta) {
+			gd.GetFolderSize(meta.Id, &gd.total)
+		} else {
+			gd.total = meta.Size
+		}
+	}
+	gd.Name = meta.Name
 	var outPath string
 	if meta.MimeType == "application/vnd.google-apps.folder" {
 		outPath = filepath.Join(localDir, meta.Name)
@@ -486,6 +514,7 @@ func (gd *GoogleDriveClient) Download(fileId string, localDir string) error {
 
 func (gd *GoogleDriveClient) Upload(path string, parentId string) error {
 	logger := logging.GetLogger()
+	gd.Name = filepath.Base(path)
 	gd.listener.OnTransferStart(gd)
 	stat, err := os.Stat(path)
 	if err != nil {
