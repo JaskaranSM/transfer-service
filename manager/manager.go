@@ -34,6 +34,7 @@ type GoogleDriveTransferStatus struct {
 	cleanAfterComplete             bool
 	path                           string
 	transferType                   string
+	err                            error
 	onTransferCompleteUserCallback func()
 }
 
@@ -86,6 +87,7 @@ func (g *GoogleDriveTransferStatus) OnTransferStart(client *gdrive.GoogleDriveCl
 func (g *GoogleDriveTransferStatus) OnTransferError(client *gdrive.GoogleDriveClient, err error) {
 	logger := logging.GetLogger()
 	g.isFailed = true
+	g.err = err
 	g.StopSpeedObserver()
 	logger.Debug(fmt.Sprintf("on %s Error: ", g.transferType), zap.Error(err))
 }
@@ -112,6 +114,10 @@ func (g *GoogleDriveTransferStatus) IsCompleted() bool {
 
 func (g *GoogleDriveTransferStatus) IsFailed() bool {
 	return g.isFailed
+}
+
+func (g *GoogleDriveTransferStatus) GetFailureError() error {
+	return g.err
 }
 
 func (g *GoogleDriveTransferStatus) Name() string {

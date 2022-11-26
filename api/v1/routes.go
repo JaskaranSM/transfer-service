@@ -35,5 +35,11 @@ func AddRoutes(router fiber.Router) {
 			return DownloadHandler(c, gdmanager)
 		},
 	)
+	router.Post(
+		"/cancel",
+		func(c *fiber.Ctx) error {
+			return CancelHandler(c, gdmanager)
+		},
+	)
 
 }

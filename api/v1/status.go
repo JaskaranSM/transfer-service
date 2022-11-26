@@ -21,7 +21,8 @@ func StatusHandler(ctx *fiber.Ctx, gdmanager *manager.GoogleDriveManager) error 
 			"error": "gid not found in manager",
 		})
 	}
-	return ctx.JSON(fiber.Map{
+	err := status.GetFailureError()
+	rtr := fiber.Map{
 		"gid":              gid,
 		"total_length":     status.TotalLength(),
 		"completed_length": status.CompletedLength(),
@@ -30,5 +31,9 @@ func StatusHandler(ctx *fiber.Ctx, gdmanager *manager.GoogleDriveManager) error 
 		"speed":            status.Speed(),
 		"transfer_type":    status.GetTransferType(),
 		"name":             status.Name(),
-	})
+	}
+	if err != nil {
+		rtr["error"] = err.Error()
+	}
+	return ctx.JSON(rtr)
 }
