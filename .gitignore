@@ -3,8 +3,10 @@
 accounts
 cosign.key
 cosign.pub
+accounts.zip
 credentials.json
 dist
 env
+transfer-service*
 log.txt
-transfer-service
+client.py

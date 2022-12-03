@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sync"
 
@@ -34,6 +35,7 @@ type GoogleDriveClient struct {
 	fileId               string
 	wg                   sync.WaitGroup
 	DriveSrv             *drive.Service
+	Name                 string
 }
 
 func (gd *GoogleDriveClient) GetDriveService() (srv *drive.Service, err error) {
@@ -134,6 +136,7 @@ func (gd *GoogleDriveClient) saveToken(path string, token *oauth2.Token) {
 
 func (gd *GoogleDriveClient) CreateDir(name string, parentId string) (*drive.File, error) {
 	logger := logging.GetLogger()
+	logger.Debug("CreateDir: ", zap.String("name", name), zap.String("parentId", parentId))
 	d := &drive.File{
 		Name:     name,
 		MimeType: "application/vnd.google-apps.folder",
@@ -141,13 +144,14 @@ func (gd *GoogleDriveClient) CreateDir(name string, parentId string) (*drive.Fil
 	}
 	file, err := gd.DriveSrv.Files.Create(d).SupportsAllDrives(true).Do()
 	if err != nil {
-		logger.Error("Could not decode token json", zap.Error(err),
+		logger.Error("Could not create dir", zap.Error(err),
 			zap.String("file path", name),
 			zap.String("parentId", parentId),
 		)
+		return nil, fmt.Errorf("CreateDir: %v", err)
 	}
 
-	return file, err
+	return file, nil
 }
 
 func (gd *GoogleDriveClient) OnTransferError(_ *GoogleDriveFileTransfer, err error) {
@@ -216,7 +220,7 @@ func (gd *GoogleDriveClient) ListFilesByParentId(parentId string, name string, c
 		)
 
 		request := gd.DriveSrv.Files.List().Q(query).OrderBy("modifiedTime desc").SupportsAllDrives(true).IncludeTeamDriveItems(true).PageSize(1000).
-			Fields("nextPageToken,files(id, name,size, mimeType)")
+			Fields("nextPageToken,files(id, name, size, mimeType)")
 
 		if pageToken != "" {
 			request = request.PageToken(pageToken)
@@ -265,6 +269,9 @@ func (gd *GoogleDriveClient) CloneDir(dir *drive.File, parentId string) error {
 	dirValue := utils.NewDirValue(dir.Id, parentId)
 	q.Enqueue(dirValue)
 	for !q.IsEmpty() {
+		if gd.isCancelled {
+			return errors.New("cancelled by user")
+		}
 		dirItem := q.Deque()
 		files, err := gd.ListFilesByParentId(dirItem.Src, "", -1)
 		if err != nil {
@@ -273,8 +280,11 @@ func (gd *GoogleDriveClient) CloneDir(dir *drive.File, parentId string) error {
 		}
 
 		for _, file := range files {
+			if gd.isCancelled {
+				return errors.New("cancelled by user")
+			}
 			if file.MimeType == "application/vnd.google-apps.folder" {
-				newDir, err := gd.CreateDir(file.Name, dirItem.Src)
+				newDir, err := gd.CreateDir(file.Name, dirItem.Des)
 				if err != nil {
 					return err
 				}
@@ -321,7 +331,7 @@ func (gd *GoogleDriveClient) DownloadDir(dir *drive.File, localDir string) error
 				v := utils.NewDirValue(file.Id, absPath)
 				q.Enqueue(v)
 			} else {
-				err = gd.HandleDownloadFile(file, absPath)
+				err = gd.HandleDownloadFile(file, dirItem.Des)
 				if err != nil {
 					return err
 				}
@@ -381,7 +391,7 @@ func (gd *GoogleDriveClient) HandleDownloadFile(file *drive.File, localDir strin
 	transfer := NewGoogleDriveFileTransfer(service, gd, nil)
 	gd.concurrency <- 1
 	gd.wg.Add(1)
-	go transfer.Download(file, localDir, 0)
+	go transfer.Download(file, path.Join(localDir, file.Name), 0)
 	gd.currentTransferQueue = append(gd.currentTransferQueue, transfer)
 	return nil
 }
@@ -400,6 +410,7 @@ func (gd *GoogleDriveClient) HandleUploadFile(path string, parentId string, cb f
 }
 
 func (gd *GoogleDriveClient) Cancel() {
+	gd.isCancelled = true
 	for _, tr := range gd.currentTransferQueue {
 		tr.Cancel()
 	}
@@ -412,18 +423,21 @@ func (gd *GoogleDriveClient) GetFileMetadata(fileId string) (*drive.File, error)
 		logger.Error("Could not get object from file ID", zap.Error(err),
 			zap.String("file ID", fileId),
 		)
+		return nil, fmt.Errorf("GetFileMetadata: %v", err)
 	}
-	return file, err
+	return file, nil
 }
 
 func (gd *GoogleDriveClient) Clone(srcId string, desId string) error {
+	logger := logging.GetLogger()
+	logger.Info("starting clone", zap.String("srcId", srcId), zap.String("desId", desId))
 	gd.listener.OnTransferStart(gd)
 	meta, err := gd.GetFileMetadata(srcId)
 	if err != nil {
 		gd.listener.OnTransferError(gd, err)
 		return err
 	}
-
+	gd.Name = meta.Name
 	var fileId string
 	if meta.MimeType == "application/vnd.google-apps.folder" {
 		newDir, err := gd.CreateDir(meta.Name, desId)
@@ -443,8 +457,31 @@ func (gd *GoogleDriveClient) Clone(srcId string, desId string) error {
 		})
 	}
 	gd.wg.Wait()
+	for _, tr := range gd.currentTransferQueue {
+		if tr.isCompleted == false {
+			return tr.err
+		}
+	}
 	gd.listener.OnTransferComplete(gd, fileId)
 	return nil
+}
+
+func (G *GoogleDriveClient) IsDir(file *drive.File) bool {
+	return file.MimeType == "application/vnd.google-apps.folder"
+}
+
+func (gd *GoogleDriveClient) GetFolderSize(folderId string, size *int64) {
+	files, _ := gd.ListFilesByParentId(folderId, "", -1)
+	for _, file := range files {
+		if gd.isCancelled {
+			return
+		}
+		if file.MimeType == "application/vnd.google-apps.folder" {
+			gd.GetFolderSize(file.Id, size)
+		} else {
+			*size += file.Size
+		}
+	}
 }
 
 func (gd *GoogleDriveClient) Download(fileId string, localDir string) error {
@@ -455,7 +492,16 @@ func (gd *GoogleDriveClient) Download(fileId string, localDir string) error {
 		gd.listener.OnTransferError(gd, err)
 		return nil
 	}
-
+	gd.Name = meta.Name
+	if gd.total == 0 {
+		gd.Name = "getting metadata"
+		if gd.IsDir(meta) {
+			gd.GetFolderSize(meta.Id, &gd.total)
+		} else {
+			gd.total = meta.Size
+		}
+	}
+	gd.Name = meta.Name
 	var outPath string
 	if meta.MimeType == "application/vnd.google-apps.folder" {
 		outPath = filepath.Join(localDir, meta.Name)
@@ -480,12 +526,18 @@ func (gd *GoogleDriveClient) Download(fileId string, localDir string) error {
 		}
 	}
 	gd.wg.Wait()
-	gd.listener.OnTransferComplete(gd, outPath)
+	for _, tr := range gd.currentTransferQueue {
+		if tr.isCompleted == false {
+			return tr.err
+		}
+	}
+	gd.listener.OnTransferComplete(gd, gd.fileId)
 	return nil
 }
 
 func (gd *GoogleDriveClient) Upload(path string, parentId string) error {
 	logger := logging.GetLogger()
+	gd.Name = filepath.Base(path)
 	gd.listener.OnTransferStart(gd)
 	stat, err := os.Stat(path)
 	if err != nil {
@@ -519,6 +571,11 @@ func (gd *GoogleDriveClient) Upload(path string, parentId string) error {
 		}
 	}
 	gd.wg.Wait()
+	for _, tr := range gd.currentTransferQueue {
+		if tr.isCompleted == false {
+			return tr.err
+		}
+	}
 	gd.listener.OnTransferComplete(gd, fileId)
 	return nil
 }
