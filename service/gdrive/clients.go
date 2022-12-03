@@ -269,6 +269,9 @@ func (gd *GoogleDriveClient) CloneDir(dir *drive.File, parentId string) error {
 	dirValue := utils.NewDirValue(dir.Id, parentId)
 	q.Enqueue(dirValue)
 	for !q.IsEmpty() {
+		if gd.isCancelled {
+			return errors.New("cancelled by user")
+		}
 		dirItem := q.Deque()
 		files, err := gd.ListFilesByParentId(dirItem.Src, "", -1)
 		if err != nil {
@@ -277,6 +280,9 @@ func (gd *GoogleDriveClient) CloneDir(dir *drive.File, parentId string) error {
 		}
 
 		for _, file := range files {
+			if gd.isCancelled {
+				return errors.New("cancelled by user")
+			}
 			if file.MimeType == "application/vnd.google-apps.folder" {
 				newDir, err := gd.CreateDir(file.Name, dirItem.Des)
 				if err != nil {
@@ -404,6 +410,7 @@ func (gd *GoogleDriveClient) HandleUploadFile(path string, parentId string, cb f
 }
 
 func (gd *GoogleDriveClient) Cancel() {
+	gd.isCancelled = true
 	for _, tr := range gd.currentTransferQueue {
 		tr.Cancel()
 	}

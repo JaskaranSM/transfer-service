@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -66,4 +67,14 @@ func GetPathSize(filePath string) (int64, error) {
 		return GetFolderSize(filePath)
 	}
 	return fileInfo.Size(), nil
+}
+
+var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func RandString(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
 }

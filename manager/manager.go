@@ -5,7 +5,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 
 	"github.com/jaskaranSM/transfer-service/logging"
@@ -34,6 +33,7 @@ type GoogleDriveTransferStatus struct {
 	cleanAfterComplete             bool
 	path                           string
 	transferType                   string
+	fileID                         string
 	err                            error
 	onTransferCompleteUserCallback func()
 }
@@ -71,10 +71,10 @@ func (g *GoogleDriveTransferStatus) SpeedObserver() {
 
 func (g *GoogleDriveTransferStatus) OnTransferComplete(client *gdrive.GoogleDriveClient, fileId string) {
 	logger := logging.GetLogger()
+	g.fileID = fileId
 	g.isCompleted = true
 	g.StopSpeedObserver()
 	logger.Debug(fmt.Sprintf("on %s complete: ", g.transferType), zap.String("fileID", fileId))
-
 	g.onTransferCompleteUserCallback()
 }
 
@@ -94,6 +94,10 @@ func (g *GoogleDriveTransferStatus) OnTransferError(client *gdrive.GoogleDriveCl
 
 func (g *GoogleDriveTransferStatus) GetTransferType() string {
 	return g.transferType
+}
+
+func (g *GoogleDriveTransferStatus) GetFileID() string {
+	return g.fileID
 }
 
 func (g *GoogleDriveTransferStatus) CompletedLength() int64 {
@@ -171,14 +175,8 @@ func (g *GoogleDriveManager) GetTransferStatusByGid(gid string) *GoogleDriveTran
 }
 
 func (g *GoogleDriveManager) AddDownload(opts *AddDownloadOpts) (string, error) {
-	logger := logging.GetLogger()
 	if opts.Gid == "" {
-		gid, err := uuid.NewUUID()
-		if err != nil {
-			logger.Error("Could not create new UUID", zap.Error(err))
-			return "", err
-		}
-		opts.Gid = gid.String()
+		opts.Gid = utils.RandString(16)
 	}
 
 	status := NewGoogleDriveTransferStatus(opts.Gid, gdriveconstants.TransferTypeDownloading, opts.FileId, false, func() {
@@ -204,12 +202,7 @@ func (g *GoogleDriveManager) AddDownload(opts *AddDownloadOpts) (string, error) 
 func (g *GoogleDriveManager) AddClone(opts *AddCloneOpts) (string, error) {
 	logger := logging.GetLogger()
 	if opts.Gid == "" {
-		gid, err := uuid.NewUUID()
-		if err != nil {
-			logger.Error("Could not create new UUID", zap.Error(err))
-			return "", err
-		}
-		opts.Gid = gid.String()
+		opts.Gid = utils.RandString(16)
 	}
 	status := NewGoogleDriveTransferStatus(opts.Gid, gdriveconstants.TransferTypeCloning, opts.FileId, false, func() {
 	})
@@ -232,12 +225,7 @@ func (g *GoogleDriveManager) AddClone(opts *AddCloneOpts) (string, error) {
 func (g *GoogleDriveManager) AddUpload(opts *AddUploadOpts) (string, error) {
 	logger := logging.GetLogger()
 	if opts.Gid == "" {
-		gid, err := uuid.NewUUID()
-		if err != nil {
-			logger.Error("Could not create new UUID", zap.Error(err))
-			return "", err
-		}
-		opts.Gid = gid.String()
+		opts.Gid = utils.RandString(16)
 	}
 	status := NewGoogleDriveTransferStatus(opts.Gid, gdriveconstants.TransferTypeUploading, opts.Path, opts.CleanAfterComplete, func() {
 	})

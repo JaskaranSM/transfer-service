@@ -31,7 +31,7 @@ func init() {
 	viper.SetDefault("APP_PORT", 6969)
 	viper.SetDefault("LOG_LEVEL", "")
 	viper.SetDefault("USE_SA", true)
-	viper.SetDefault("ENVIRONMENT", "local")
+	viper.SetDefault("ENVIRONMENT", "")
 	viper.AutomaticEnv()
 
 	// Read config file

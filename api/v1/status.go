@@ -31,6 +31,7 @@ func StatusHandler(ctx *fiber.Ctx, gdmanager *manager.GoogleDriveManager) error 
 		"speed":            status.Speed(),
 		"transfer_type":    status.GetTransferType(),
 		"name":             status.Name(),
+		"file_id":          status.GetFileID(),
 	}
 	if err != nil {
 		rtr["error"] = err.Error()

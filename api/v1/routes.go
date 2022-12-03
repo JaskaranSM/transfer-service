@@ -23,6 +23,12 @@ func AddRoutes(router fiber.Router) {
 			return StatusHandler(c, gdmanager)
 		},
 	)
+	router.Get(
+		"/filemetadata/:fileId",
+		func(c *fiber.Ctx) error {
+			return FileMetdataHandler(c, gdmanager)
+		},
+	)
 	router.Post(
 		"/upload",
 		func(c *fiber.Ctx) error {
@@ -39,6 +45,12 @@ func AddRoutes(router fiber.Router) {
 		"/cancel",
 		func(c *fiber.Ctx) error {
 			return CancelHandler(c, gdmanager)
+		},
+	)
+	router.Post(
+		"/listfiles",
+		func(c *fiber.Ctx) error {
+			return ListFilesHandler(c, gdmanager)
 		},
 	)
 

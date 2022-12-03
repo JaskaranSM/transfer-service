@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/jaskaranSM/transfer-service/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -21,7 +22,14 @@ func getLoggerObject() *zap.Logger {
 		)
 	}
 	var level zapcore.Level = 0
-	level = zapcore.DebugLevel
+	if config.Get().LogLevel == "debug" {
+		level = zapcore.DebugLevel
+	} else if config.Get().LogLevel == "error" {
+		level = zapcore.ErrorLevel
+	} else {
+		level = zapcore.InfoLevel
+	}
+
 	cfg := zap.NewProductionEncoderConfig()
 	cfg.EncodeLevel = zapcore.CapitalLevelEncoder
 	cfg.EncodeTime = zapcore.RFC3339TimeEncoder
