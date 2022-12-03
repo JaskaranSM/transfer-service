@@ -1,7 +1,9 @@
 .idea
 accounts
+accounts.zip
 credentials.json
 .env
 env
-transfer-service
+transfer-service*
 log.txt
+client.py
