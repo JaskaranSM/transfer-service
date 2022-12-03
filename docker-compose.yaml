@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  transfer-service:
+    image: ghcr.io/jaskaransm/transfer-service:latest
+    container_name: transfer-service
+    # restart: unless-stopped
+    # environment:
+    #   - TZ=
+    networks:
+      - tf
+    ports:
+      - "6969:6969"
+
+networks:
+  tf:
+    name: transfer-service

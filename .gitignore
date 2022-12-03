@@ -1,8 +1,11 @@
+.env
 .idea
 accounts
+cosign.key
+cosign.pub
 accounts.zip
 credentials.json
-.env
+dist
 env
 transfer-service*
 log.txt
