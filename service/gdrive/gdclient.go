@@ -142,7 +142,6 @@ func (g *GoogleDriveFileTransfer) Download(file *drive.File, path string, retry 
 		return
 	}
 	g.file = fileHandle
-	defer g.file.Close()
 	if retry == 0 {
 		logger.Debug("on Transfer Start:", zap.String("fileID", file.Id))
 		g.listener.OnTransferStart(g)
@@ -156,6 +155,7 @@ func (g *GoogleDriveFileTransfer) Download(file *drive.File, path string, retry 
 			g.Download(file, path, retry+1)
 			return
 		}
+		g.file.Close()
 		g.err = err
 		logger.Error("Error while getting file", zap.Error(err))
 		g.listener.OnTransferError(g, err)
@@ -171,11 +171,13 @@ func (g *GoogleDriveFileTransfer) Download(file *drive.File, path string, retry 
 			g.Download(file, path, retry+1)
 			return
 		}
+		g.file.Close()
 		g.err = err
 		logger.Error("Error while copying file stream", zap.Error(err))
 		g.listener.OnTransferError(g, err)
 		return
 	}
+	g.file.Close()
 	g.isCompleted = true
 	logger.Debug("on transfer complete", zap.String("path", path))
 	g.listener.OnTransferComplete(g)
@@ -195,13 +197,13 @@ func (g *GoogleDriveFileTransfer) Upload(path string, parentId string, retry int
 		return
 	}
 	g.file = fileHandle
-	defer g.file.Close()
 	if retry == 0 {
 		logger.Debug("on Transfer Start:", zap.String("path", path))
 		g.listener.OnTransferStart(g)
 	}
 	contentType, err := utils.GetFileContentTypePath(path)
 	if err != nil {
+		g.file.Close()
 		g.err = err
 		logger.Error("Error while getting mimetype of file", zap.Error(err))
 		g.listener.OnTransferError(g, err)
@@ -221,14 +223,16 @@ func (g *GoogleDriveFileTransfer) Upload(path string, parentId string, retry int
 			g.Upload(path, parentId, retry+1)
 			return
 		}
+		g.file.Close()
 		g.err = err
 		logger.Error("Error creating file on gdrive", zap.Error(err))
 		g.listener.OnTransferError(g, err)
 		return
 	}
+	g.file.Close()
 	g.fileId = file.Id
-	g.onTransferComplete(file)
 	g.isCompleted = true
+	g.onTransferComplete(file)
 	g.listener.OnTransferComplete(g)
 }
 
