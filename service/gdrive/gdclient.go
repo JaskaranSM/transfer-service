@@ -213,7 +213,7 @@ func (g *GoogleDriveFileTransfer) Upload(path string, parentId string, retry int
 		Name:     filepath.Base(path),
 		Parents:  []string{parentId},
 	}
-	file, err := g.service.Files.Create(f).SupportsAllDrives(true).SupportsTeamDrives(true).Media(g, googleapi.ChunkSize(512*1024)).Do()
+	file, err := g.service.Files.Create(f).SupportsAllDrives(true).SupportsTeamDrives(true).Media(g, googleapi.ChunkSize(50*1024*1024)).Do()
 	if err != nil {
 		if retry < gdriveconstants.MaxRetries && err != constants.CancelledByUserError {
 			g.file.Close()
