@@ -2,7 +2,6 @@ package gdrive
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -245,6 +244,7 @@ func NewGoogleDriveClient(con int, total int64, listener GoogleDriveClientListen
 		listener:       listener,
 		Name:           "unknown",
 	}
+	client.init()
 	return client
 }
 
@@ -278,7 +278,7 @@ func (gd *GoogleDriveClient) getAuthorizedHTTPClient(sa bool) (*http.Client, err
 	logger := logging.GetLogger()
 	var client *http.Client
 	if sa {
-		b, err := ioutil.ReadFile(fmt.Sprintf("%s/%d.json", gdriveconstants.SADir, gdriveconstants.GlobalSAIndex))
+		b, err := ioutil.ReadFile(gd.SaFiles[gdriveconstants.GlobalSAIndex])
 		if err != nil {
 			logger.Error("Error reading service account file", zap.Error(err))
 			return nil, err

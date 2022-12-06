@@ -17,6 +17,7 @@ import (
 
 	"github.com/jaskaranSM/transfer-service/config"
 	"github.com/jaskaranSM/transfer-service/logging"
+	gdriveconstants "github.com/jaskaranSM/transfer-service/service/gdrive/constants"
 	"github.com/jaskaranSM/transfer-service/utils"
 )
 
@@ -35,7 +36,23 @@ type GoogleDriveClient struct {
 	fileId               string
 	wg                   sync.WaitGroup
 	DriveSrv             *drive.Service
+	SaFiles              []string
 	Name                 string
+}
+
+func (gd *GoogleDriveClient) init() {
+	logger := logging.GetLogger()
+	cfg := config.Get()
+	if cfg.UseSA {
+		files, err := os.ReadDir(gdriveconstants.SADir)
+		if err != nil {
+			logger.Error("Error while reading service accounts dir", zap.String("SADir", gdriveconstants.SADir), zap.Error(err))
+			return
+		}
+		for i := range files {
+			gd.SaFiles = append(gd.SaFiles, path.Join(gdriveconstants.SADir, files[i].Name()))
+		}
+	}
 }
 
 func (gd *GoogleDriveClient) GetDriveService() (srv *drive.Service, err error) {
