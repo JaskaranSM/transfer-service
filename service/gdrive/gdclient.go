@@ -108,6 +108,7 @@ func (g *GoogleDriveFileTransfer) Clone(file *drive.File, desId string, retry in
 	file, err := g.service.Files.Copy(file.Id, f).Fields("*").SupportsAllDrives(true).SupportsTeamDrives(true).Do()
 	if err != nil {
 		if retry < gdriveconstants.MaxRetries && err != constants.CancelledByUserError {
+			g.listener.OnTransferUpdate(g, g.completed*-1)
 			g.completed = 0
 			logger.Debug("files:copy: Retrying clone transfer", zap.Any("file", file), zap.String("desId", desId), zap.Int("retry", retry))
 			g.Clone(file, desId, retry+1)
@@ -149,6 +150,7 @@ func (g *GoogleDriveFileTransfer) Download(file *drive.File, path string, retry 
 	if err != nil {
 		if retry < gdriveconstants.MaxRetries && err != constants.CancelledByUserError {
 			g.file.Close()
+			g.listener.OnTransferUpdate(g, g.completed*-1)
 			g.completed = 0
 			logger.Debug("Files:Get: Retrying download transfer", zap.Any("file", file), zap.String("path", path), zap.Int("retry", retry))
 			g.Download(file, path, retry+1)
@@ -165,6 +167,7 @@ func (g *GoogleDriveFileTransfer) Download(file *drive.File, path string, retry 
 	if err != nil {
 		if retry < gdriveconstants.MaxRetries && err != constants.CancelledByUserError {
 			g.file.Close()
+			g.listener.OnTransferUpdate(g, g.completed*-1)
 			g.completed = 0
 			logger.Debug("io:copy: Retrying download transfer", zap.Any("file", file), zap.String("path", path), zap.Int("retry", retry))
 			g.Download(file, path, retry+1)
@@ -200,14 +203,7 @@ func (g *GoogleDriveFileTransfer) Upload(path string, parentId string, retry int
 		logger.Debug("on Transfer Start:", zap.String("path", path))
 		g.listener.OnTransferStart(g)
 	}
-	contentType, err := utils.GetFileContentTypePath(path)
-	if err != nil {
-		g.file.Close()
-		g.err = err
-		logger.Error("Error while getting mimetype of file", zap.Error(err))
-		g.listener.OnTransferError(g, err)
-		return
-	}
+	contentType := utils.GetFileContentTypePath(path)
 	f := &drive.File{
 		MimeType: contentType,
 		Name:     filepath.Base(path),
@@ -217,6 +213,7 @@ func (g *GoogleDriveFileTransfer) Upload(path string, parentId string, retry int
 	if err != nil {
 		if retry < gdriveconstants.MaxRetries && err != constants.CancelledByUserError {
 			g.file.Close()
+			g.listener.OnTransferUpdate(g, g.completed*-1)
 			g.completed = 0
 			logger.Debug("files:create: Retrying upload transfer", zap.Any("path", path), zap.String("parentId", parentId), zap.Int("retry", retry))
 			g.Upload(path, parentId, retry+1)
