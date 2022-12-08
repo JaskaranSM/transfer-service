@@ -12,25 +12,23 @@ import (
 	"github.com/jaskaranSM/transfer-service/logging"
 )
 
-func GetFileContentTypePath(file_path string) (string, error) {
+func GetFileContentTypePath(file_path string) string {
 	file, err := os.Open(file_path)
 	if err != nil {
-		return "", err
+
+		logging.GetLogger().Error("Error occurred when opening file for getting mimetype", zap.Error(err))
+		return "application/octet-stream"
 	}
 	defer file.Close()
 	return GetFileContentType(file)
 }
 
-func GetFileContentType(out *os.File) (string, error) {
+func GetFileContentType(out *os.File) string {
 	buffer := make([]byte, 512)
-
-	_, err := out.Read(buffer)
-	if err != nil {
-		return "", err
-	}
+	out.Read(buffer)
 	contentType := http.DetectContentType(buffer)
 
-	return contentType, nil
+	return contentType
 }
 
 func HandleError(ctx *fiber.Ctx, err error) error {
