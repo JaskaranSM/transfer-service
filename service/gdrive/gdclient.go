@@ -105,7 +105,7 @@ func (g *GoogleDriveFileTransfer) Clone(file *drive.File, desId string, retry in
 	f := &drive.File{
 		Parents: []string{desId},
 	}
-	file, err := g.service.Files.Copy(file.Id, f).Fields("*").SupportsAllDrives(true).SupportsTeamDrives(true).Do()
+	newFile, err := g.service.Files.Copy(file.Id, f).Fields("*").SupportsAllDrives(true).SupportsTeamDrives(true).Do()
 	if err != nil {
 		if retry < gdriveconstants.MaxRetries && err != constants.CancelledByUserError {
 			g.listener.OnTransferUpdate(g, g.completed*-1)
@@ -120,11 +120,11 @@ func (g *GoogleDriveFileTransfer) Clone(file *drive.File, desId string, retry in
 		return
 	}
 	g.listener.OnTransferUpdate(g, fileSize)
-	g.fileId = file.Id
+	g.fileId = newFile.Id
 	g.completed = fileSize
-	g.onTransferComplete(file)
+	g.onTransferComplete(newFile)
 	g.isCompleted = true
-	logger.Info("on transfer complete", zap.String("fileID", file.Id))
+	logger.Info("on transfer complete", zap.String("fileID", newFile.Id))
 	g.listener.OnTransferComplete(g)
 }
 
