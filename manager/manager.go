@@ -3,6 +3,7 @@ package manager
 import (
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -168,9 +169,12 @@ func NewGoogleDriveManager() *GoogleDriveManager {
 
 type GoogleDriveManager struct {
 	queue map[string]*GoogleDriveTransferStatus
+	mut   sync.Mutex
 }
 
 func (g *GoogleDriveManager) GetTransferStatusByGid(gid string) *GoogleDriveTransferStatus {
+	g.mut.Lock()
+	defer g.mut.Unlock()
 	return g.queue[gid]
 }
 
@@ -184,7 +188,9 @@ func (g *GoogleDriveManager) AddDownload(opts *AddDownloadOpts) (string, error) 
 
 	client := gdrive.NewGoogleDriveClient(opts.Concurrency, opts.Size, status)
 	status.SetClient(client)
+	g.mut.Lock()
 	g.queue[status.gid] = status
+	g.mut.Unlock()
 	err := client.Authorize()
 	if err != nil {
 		return opts.Gid, err
@@ -208,7 +214,9 @@ func (g *GoogleDriveManager) AddClone(opts *AddCloneOpts) (string, error) {
 	})
 	client := gdrive.NewGoogleDriveClient(opts.Concurrency, opts.Size, status)
 	status.SetClient(client)
+	g.mut.Lock()
 	g.queue[status.gid] = status
+	g.mut.Unlock()
 	err := client.Authorize()
 	if err != nil {
 		return opts.Gid, err
@@ -238,7 +246,9 @@ func (g *GoogleDriveManager) AddUpload(opts *AddUploadOpts) (string, error) {
 	}
 	client := gdrive.NewGoogleDriveClient(opts.Concurrency, opts.Size, status)
 	status.SetClient(client)
+	g.mut.Lock()
 	g.queue[status.gid] = status
+	g.mut.Unlock()
 	err := client.Authorize()
 	if err != nil {
 		return opts.Gid, err
