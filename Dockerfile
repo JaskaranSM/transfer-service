@@ -1,6 +1,6 @@
-FROM alpine:3.16
+FROM ubuntu:22.04
 
-RUN apk --no-cache add ca-certificates bash curl coreutils tzdata
+RUN apt-get update && apt-get install ca-certificates bash curl coreutils tzdata -y
 
 WORKDIR /app
 COPY transfer-service .
