@@ -68,6 +68,7 @@ func (g *GoogleDriveFileTransfer) Write(p []byte) (int, error) {
 	logger.Debug("on transfer update: ", zap.Int("chunk_written", bytesWritten))
 	g.listener.OnTransferUpdate(g, int64(bytesWritten))
 	if err != nil && err != io.EOF {
+		g.file.Close() //please close
 		logger.Error("Error while writing file bytes", zap.Error(err), zap.String("filepath", g.file.Name()))
 		g.listener.OnTransferError(g, err)
 	}
@@ -75,17 +76,15 @@ func (g *GoogleDriveFileTransfer) Write(p []byte) (int, error) {
 }
 
 func (g *GoogleDriveFileTransfer) Read(p []byte) (int, error) {
-	logger := logging.GetLogger()
 	if g.isCancelled {
 		err := constants.CancelledByUserError
 		g.listener.OnTransferError(g, err)
 		return 0, err
 	}
 	bytesRead, err := g.file.Read(p)
-	g.completed += int64(bytesRead)
-	logger.Debug("on transfer update: ", zap.Int("chunk_read", bytesRead))
-	g.listener.OnTransferUpdate(g, int64(bytesRead))
 	if err != nil && err != io.EOF {
+		g.file.Close() //please close
+		logger := logging.GetLogger()
 		logger.Error("Error while reading file bytes", zap.Error(err), zap.String("filepath", g.file.Name()))
 		g.listener.OnTransferError(g, err)
 	}
@@ -209,7 +208,15 @@ func (g *GoogleDriveFileTransfer) Upload(path string, parentId string, retry int
 		Name:     filepath.Base(path),
 		Parents:  []string{parentId},
 	}
-	file, err := g.service.Files.Create(f).SupportsAllDrives(true).SupportsTeamDrives(true).Media(g, googleapi.ChunkSize(50*1024*1024)).Do()
+	var lastCompleted int64
+	file, err := g.service.Files.Create(f).SupportsAllDrives(true).Media(g, googleapi.ChunkSize(1*1024*1024)).ProgressUpdater(func(current, total int64) {
+		chunkCompleted := current - lastCompleted
+		lastCompleted = current
+		logger := logging.GetLogger()
+		g.completed += int64(chunkCompleted)
+		g.listener.OnTransferUpdate(g, chunkCompleted)
+		logger.Debug("on transfer update: ", zap.Int64("chunk_read", chunkCompleted))
+	}).Do()
 	if err != nil {
 		if retry < gdriveconstants.MaxRetries && err != constants.CancelledByUserError {
 			g.file.Close()
