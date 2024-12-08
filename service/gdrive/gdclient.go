@@ -209,7 +209,7 @@ func (g *GoogleDriveFileTransfer) Upload(path string, parentId string, retry int
 		Parents:  []string{parentId},
 	}
 	var lastCompleted int64
-	file, err := g.service.Files.Create(f).SupportsAllDrives(true).Media(g, googleapi.ChunkSize(1*1024*1024)).ProgressUpdater(func(current, total int64) {
+	file, err := g.service.Files.Create(f).SupportsAllDrives(true).Media(g, googleapi.ChunkSize(50*1024*1024)).ProgressUpdater(func(current, total int64) {
 		chunkCompleted := current - lastCompleted
 		lastCompleted = current
 		logger := logging.GetLogger()
